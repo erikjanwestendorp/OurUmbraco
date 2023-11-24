@@ -33,6 +33,10 @@
                 <div class="utilities">
                     @Html.Action("Render", "Breadcrumb", new { linkToCurrent = true })
                 </div>
+                <div style="width: 100%;" class="alertbar__red">
+                    <h2 style="color: black; font-size: 50px; text-align: center; line-height: 50px; text-decoration: underline;">We have moved!</h2>
+                    <p style="font-size:20px; text-align: center; line-height: 50px; color: black; margin: 0 auto;max-width: 1000px;">Packages for Umbraco 8+ have a new home. Go to <a href="https://marketplace.umbraco.com">marketplace.umbraco.com</a> for an up-to-date overview.<br> If you want to get your package listed on the new marketplace please refer to the <a href="https://marketplace.umbraco.com/listing">documentation.</a></p>
+                </div>
             </div>
         </div>
     </div>
@@ -60,7 +64,6 @@
                         <nav role="navigation">
                             <a href="?page=1&orderBy=@orderMode">See more &raquo;</a>
                         </nav>
-
                     }
                     else
                     {
@@ -88,6 +91,11 @@
                         @Html.Partial("~/Views/Partials/Projects/ListProjects.cshtml", Model.Content, new ViewDataDictionary() { { "orderBy", "popularity" }, { "isHome", isHome } })
                     </div>
                 </div>
+
+                @*
+                Hidden as for now will only display promoted packages in the back-office, not on our.umbraco.com.
+                @Html.Partial("~/Views/Partials/Projects/ListPromotedProjects.cshtml", Model.Content)
+                *@
 
                 <div class="row">
                     <div class="col-xs-12">

@@ -57,8 +57,8 @@ namespace OurUmbraco.Our.GoogleOAuth
             var scheduler = new ScheduleHangfireJobs();
             scheduler.MarkAsSolvedReminder();
             scheduler.UpdateGitHubContributors();
-            scheduler.UpdateMeetupStats();
-            scheduler.UpdateCommunityBlogPosts();
+            scheduler.CacheUpcomingMeetups(null);
+            scheduler.UpdateCommunityBlogPosts(null);
             scheduler.UpdateCommunityVideos();
             scheduler.UpdateVimeoVideos();
             scheduler.GetGitHubPullRequests();
@@ -67,14 +67,14 @@ namespace OurUmbraco.Our.GoogleOAuth
             scheduler.UpdateGitHubIssues(null);
             scheduler.UpdateAllIssues(null);
             scheduler.GetAllGitHubLabels(null);
-            scheduler.AddCommentToAwaitingFeedbackIssues(null);
-            scheduler.AddCommentToUpForGrabsIssues(null);
-            scheduler.NotifyUnmergeablePullRequests(null);
-            scheduler.AddCommentToStateHQDiscussionIssues(null);
-
-            scheduler.CheckContributorBadge(null);
+            // scheduler.AddCommentToAwaitingFeedbackIssues(null);
+            // scheduler.NotifyUnmergeablePullRequests(null);
+            // scheduler.AddCommentToStateHQDiscussionIssues(null);
+            //
+            // scheduler.CheckContributorBadge(null);
             scheduler.GetNugetDownloads(null);
             scheduler.FetchStaticApiDocumentation(null);
+            scheduler.FetchMastodonPosts(null);
         }
     }
 }

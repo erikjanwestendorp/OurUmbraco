@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Web;
+using System.Web.Helpers;
 using System.Web.Hosting;
 using Hangfire.Console;
 using Hangfire.Server;
@@ -15,9 +16,11 @@ using OurUmbraco.Our.Models;
 using OurUmbraco.Our.Models.GitHub;
 using Umbraco.Core;
 using Umbraco.Core.Configuration;
+using Umbraco.Core.Models;
 using Umbraco.Web;
 using Umbraco.Web.Routing;
 using Umbraco.Web.Security;
+using File = System.IO.File;
 
 namespace OurUmbraco.Our.Services
 {
@@ -38,6 +41,12 @@ namespace OurUmbraco.Our.Services
         {
             var cache = GetReleasesCache();
             return cache.FirstOrDefault(x => x.LatestRelease);
+        }
+        
+        public Release GetLatestVersion8Release()
+        {
+            var cache = GetReleasesCache();
+            return cache.OrderBy(x => x.FullVersion).LastOrDefault(x => x.Released && x.FullVersion.Major == 8);
         }
 
         internal List<Release> ReleasesCache()
@@ -88,6 +97,7 @@ namespace OurUmbraco.Our.Services
             context.WriteLine($"Found {releaseNodes.Length} releases");
 
             var releases = new List<Release>();
+            var recommendedReleases = new List<Release>();
             foreach (var node in releaseNodes)
             {
                 if (System.Version.TryParse(node.Name, out var version) == false)
@@ -103,7 +113,6 @@ namespace OurUmbraco.Our.Services
                     Version = version.ToString(),
                     IsPatch = version.Minor != 0,
                     ReleaseDescription = releaseDescription,
-                    CurrentRelease = recommendedRelease,
                     ReleaseStatus = status,
                     InProgressRelease = status != "Released",
                     PlannedRelease = status != "Released",
@@ -112,11 +121,33 @@ namespace OurUmbraco.Our.Services
                     PercentComplete = manualProgressPercent
                 };
                 releases.Add(release);
+                if (recommendedRelease)
+                {
+                    recommendedReleases.Add(release);
+                }
+            }
+            var latestRecommendedRelease = recommendedReleases.OrderBy(x => x.Version).LastOrDefault();
+            if (latestRecommendedRelease != null)
+            {
+                // set the newest recommended release as the current release
+                latestRecommendedRelease.CurrentRelease = true;
             }
 
-            var latestRelease = releases.OrderBy(x => x.Version).Last(x => x.CurrentRelease && x.Released);
-            latestRelease.LatestRelease = true;
-            context.WriteLine($"Newest downloadable release is {latestRelease.Version}");
+            var latestRelease = releases.OrderBy(x => x.Version).LastOrDefault(x => x.CurrentRelease && x.Released);
+            if (latestRelease != null)
+            {
+                latestRelease.LatestRelease = true;
+                context.WriteLine($"Newest downloadable release is {latestRelease.Version}");
+            }
+            else
+            {
+                var newestReleased = releases.OrderBy(x => x.Version).LastOrDefault(x => x.Released);
+                if (newestReleased != null)
+                {
+                    newestReleased.LatestRelease = true;
+                    context.WriteLine($"Latest downloadable release is {newestReleased.Version}");
+                }
+            }
 
             PopulateGitHubIssues(context, releases);
             PopulateYouTrackIssues(context, releases);
@@ -130,42 +161,18 @@ namespace OurUmbraco.Our.Services
 
         private static void PopulateYouTrackIssues(PerformContext context, List<Release> releases)
         {
-            var httpClient = new HttpClient();
-            const string issuesUrlPrefix = "https://issues.s1.umbraco.io/Umbraco/Api/Releases";
+            var youTrackArchiveFile = HostingEnvironment.MapPath("~/config/YouTrackArchive.json");
+            var text = File.ReadAllText(youTrackArchiveFile);
+            var youTrackArchive = JsonConvert.DeserializeObject<List<Release.Issue>>(text);
 
             foreach (var release in releases)
             {
-                var url = $"{issuesUrlPrefix}/GetIssuesForRelease?release={release.Version}";
-                var response = httpClient.GetAsync(url).Result;
-                if (response.IsSuccessStatusCode)
-                {
-                    var releaseIssues = response.Content.ReadAsAsync<ReleaseIssues>().Result;
-                    context.WriteLine($"Found {releaseIssues.Issues.Count} issues for release {release.Version}");
-                    release.ReleaseDate = releaseIssues.ReleaseDate;
-                    foreach (var issue in releaseIssues.Issues)
-                    {
-                        // Anything from the old issue tracker that's not set to
-                        // fixed should not appear in the release notes of v8
-                        if(release.Version == "8.0.0" && issue.State != "Fixed")
-                            continue;
+                if(release.Version == "8.0.0")
+                    continue;
 
-                        release.Issues.Add(new Release.Issue
-                        {
-                            Id = issue.IssueNumber,
-                            Breaking = issue.Breaking,
-                            State = issue.State,
-                            Title = issue.IssueTitle,
-                            Type = issue.Type,
-                            Source = ReleaseSource.YouTrack
-                        });
-                    }
-                }
-                else
-                {
-                    context.WriteLine($"Release {release.Version} could not be found on YouTrack");
-                }
+                var issues = youTrackArchive.Where(x => x.Version == release.Version);
+                release.Issues.AddRange(issues);
             }
-
         }
 
         private static void PopulateGitHubIssues(PerformContext context, List<Release> releases)

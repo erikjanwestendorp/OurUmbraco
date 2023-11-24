@@ -1,12 +1,11 @@
 ﻿using System;
-using System.Text;
-using System.Web.Hosting;
 using Hangfire;
 using Hangfire.Server;
-using Newtonsoft.Json;
 using OurUmbraco.Community.GitHub;
 using OurUmbraco.Community.BlogPosts;
 using OurUmbraco.Community.Karma;
+using OurUmbraco.Community.Mastodon;
+using OurUmbraco.Community.Meetup;
 using OurUmbraco.Community.Nuget;
 using OurUmbraco.Community.Videos;
 using OurUmbraco.Documentation;
@@ -52,9 +51,10 @@ namespace OurUmbraco.NotificationsCore.Notifications
             RecurringJob.AddOrUpdate(() => UpdateGitHubContributorsJsonFile(), Cron.HourInterval(12));
         }
 
-        public void UpdateMeetupStats()
+        public void CacheUpcomingMeetups(PerformContext context)
         {
-            RecurringJob.AddOrUpdate(() => UpdateMeetupStatsJsonFile(), Cron.HourInterval(12));
+            var meetupService = new MeetupService();
+            RecurringJob.AddOrUpdate(() => meetupService.CacheUpcomingMeetups(), Cron.MinuteInterval(30));
         }
 
         public void UpdateGitHubContributorsJsonFile()
@@ -63,15 +63,10 @@ namespace OurUmbraco.NotificationsCore.Notifications
             service.UpdateOverallContributors();
         }
 
-        public void UpdateMeetupStatsJsonFile()
+        public void UpdateCommunityBlogPosts(PerformContext context)
         {
-            var service = new Community.Meetup.MeetupService();
-            service.UpdateMeetupStats();
-        }
-
-        public void UpdateCommunityBlogPosts()
-        {
-            RecurringJob.AddOrUpdate(() => UpdateBlogPostsJsonFile(null), Cron.HourInterval(1));
+            var service = new BlogPostsService();
+            RecurringJob.AddOrUpdate(() => service.UpdateBlogPostsJsonFile(context), Cron.HourInterval(1));
         }
 
         public void UpdateVimeoVideos()
@@ -83,21 +78,6 @@ namespace OurUmbraco.NotificationsCore.Notifications
         {
             var vimeoVideoService = new VideosService();
             vimeoVideoService.UpdateVimeoVideos("umbraco");
-        }
-
-        public void UpdateBlogPostsJsonFile(PerformContext context)
-        {
-            // Initialize a new service
-            var service = new BlogPostsService();
-
-            // Determine the path to the JSON file
-            var jsonPath = HostingEnvironment.MapPath("~/App_Data/TEMP/CommunityBlogPosts.json");
-
-            // Generate the raw JSON
-            var rawJson = JsonConvert.SerializeObject(service.GetBlogPosts(context), Formatting.Indented);
-
-            // Save the JSON to disk
-            System.IO.File.WriteAllText(jsonPath, rawJson, Encoding.UTF8);
         }
 
         public void UpdateCommunityVideos()
@@ -143,7 +123,7 @@ namespace OurUmbraco.NotificationsCore.Notifications
             var gitHubService = new GitHubService();
             foreach (var repository in repositories)
             {
-                RecurringJob.AddOrUpdate($"[IssueTracker] Update {repository.Name}", () => gitHubService.UpdateIssues(context, repository), Cron.MinuteInterval(5));
+                RecurringJob.AddOrUpdate($"[IssueTracker] Update {repository.Name}", () => gitHubService.UpdateIssues(context, repository), Cron.MinuteInterval(15));
             }
         }
 
@@ -163,12 +143,6 @@ namespace OurUmbraco.NotificationsCore.Notifications
         {
             var gitHubService = new GitHubService();
             RecurringJob.AddOrUpdate(() => gitHubService.DownloadAllLabels(context), Cron.MonthInterval(12));
-        }
-
-        public void AddCommentToUpForGrabsIssues(PerformContext context)
-        {
-            var gitHubService = new GitHubService();
-            RecurringJob.AddOrUpdate(() => gitHubService.AddCommentToUpForGrabsIssues(context), Cron.MinuteInterval(10));
         }
 
         public void AddCommentToAwaitingFeedbackIssues(PerformContext context)
@@ -195,17 +169,22 @@ namespace OurUmbraco.NotificationsCore.Notifications
             RecurringJob.AddOrUpdate(() => contributors.CheckContributorBadges(context), Cron.MinuteInterval(5));
         }
 
-        public void GetNugetDownloads(PerformContext content)
+        public void GetNugetDownloads(PerformContext context)
         {
             var nugetService = new NugetPackageDownloadService();
 
-            RecurringJob.AddOrUpdate(() => nugetService.ImportNugetPackageDownloads(), Cron.Daily);
+            RecurringJob.AddOrUpdate(() => nugetService.ImportNugetPackageDownloads(context), Cron.Daily);
         }
         
         public void FetchStaticApiDocumentation(PerformContext context)
         {
             var staticApiDocumentationService = new StaticApiDocumentationService();
             RecurringJob.AddOrUpdate(() => staticApiDocumentationService.FetchNewApiDocs(context), Cron.MinuteInterval(5));
+        }
+        public void FetchMastodonPosts(PerformContext context)
+        {
+            var mastodonService = new MastodonService();
+            RecurringJob.AddOrUpdate(() => mastodonService.GetStatuses(10), Cron.MinuteInterval(2));
         }
     }
 }

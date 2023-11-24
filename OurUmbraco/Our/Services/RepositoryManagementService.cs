@@ -2,16 +2,12 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Web.Hosting;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using OurUmbraco.Community.GitHub;
+using OurUmbraco.Documentation.Busineslogic.GithubSourcePull;
 using OurUmbraco.Our.Models.GitHub;
-using OurUmbraco.Our.Models.GitHub.AutoReplies;
-using Skybrud.Essentials.Json.Extensions;
 using Umbraco.Core;
-using Umbraco.Core.Logging;
 using File = System.IO.File;
 
 namespace OurUmbraco.Our.Services
@@ -26,7 +22,10 @@ namespace OurUmbraco.Our.Services
             var issues = new List<Issue>();
 
             var pullRequestService = new GitHubService();
-            var hqMembers = pullRequestService.GetHqMembers();
+            
+            var usersService = new UsersService();
+            var hqMembers = usersService.GetIgnoredGitHubUsers().Result.ToArray();
+            
             var teamMembers = pullRequestService.GetTeamMembers();
 
             foreach (var directory in Directory.EnumerateDirectories(IssuesBaseDirectory))
@@ -55,9 +54,16 @@ namespace OurUmbraco.Our.Services
                     // Skip the file if older than the specified timestamp
                     if (since != null && File.GetLastWriteTimeUtc(file) < since.Value) continue;
 
-                    var fileContent = File.ReadAllText(file);
-                    var item = JsonConvert.DeserializeObject<Issue>(fileContent);
+                    Issue item = null;
+                    Retry.Do(() =>
+                    {
+                        var fileContent = File.ReadAllText(file);
+                        item = JsonConvert.DeserializeObject<Issue>(fileContent);
+                    }, TimeSpan.FromMilliseconds(200), 3);
 
+                    if (item == null) 
+                        continue;
+                    
                     // Exclude issues created by HQ
                     if (hqMembers.Contains(item.User.Login.ToLowerInvariant()))
                         continue;
@@ -102,8 +108,16 @@ namespace OurUmbraco.Our.Services
                     // Skip the file if older than the specified timestamp
                     if (since != null && File.GetLastWriteTimeUtc(file) < since.Value) continue;
 
-                    var fileContent = File.ReadAllText(file);
-                    var item = JsonConvert.DeserializeObject<Issue>(fileContent);
+                    Issue item = null;
+                    Retry.Do(() =>
+                    {
+                        var fileContent = File.ReadAllText(file);
+                        item = JsonConvert.DeserializeObject<Issue>(fileContent);
+                    }, TimeSpan.FromMilliseconds(200), 3);
+
+                    if (item == null) 
+                        continue;
+
                     item.RepositoryName = repositoryName;
 
                     issues.Add(item);
@@ -151,8 +165,9 @@ namespace OurUmbraco.Our.Services
             };
 
 
+            var usersService = new UsersService();
+            var hqMembers = usersService.GetIgnoredGitHubUsers().Result;
             var pullRequestService = new GitHubService();
-            var hqMembers = pullRequestService.GetHqMembers();
             var teamMembers = pullRequestService.GetTeamMembers();
             var teamUmbraco = hqMembers;
 

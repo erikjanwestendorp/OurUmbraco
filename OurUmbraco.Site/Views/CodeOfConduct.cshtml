@@ -1,4 +1,4 @@
-﻿@inherits Umbraco.Web.Mvc.UmbracoTemplatePage
+@inherits Umbraco.Web.Mvc.UmbracoTemplatePage
 @using Umbraco.Core.Cache
 @{
     Layout = "Master.cshtml";
@@ -28,14 +28,16 @@
     {
         try
         {
-            return ApplicationContext.Current.ApplicationCache.RuntimeCache.GetCacheItem<string>("GitHubCodeOfConduct", () =>
+            return ApplicationContext.Current.ApplicationCache.RuntimeCache.GetCacheItem<string>("CodeOfConductGitHub", () =>
             {
                 string markdownContent;
                 using (var client = new WebClient())
                 {
                     markdownContent = client.DownloadString(url);
                 }
-                return Markdig.Markdown.ToHtml(markdownContent);
+                var html = Markdig.Markdown.ToHtml(markdownContent);
+                html = html.Replace("Ã¨", "&egrave;");
+                return html;
             }, TimeSpan.FromHours(1));
         }
         catch (Exception e)

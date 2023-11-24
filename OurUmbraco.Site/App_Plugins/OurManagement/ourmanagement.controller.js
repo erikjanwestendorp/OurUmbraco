@@ -3,7 +3,7 @@
     vm.docsLoading = false;
 
     $scope.getPullRequestStatisticsCms = function () {
-        var prDataUrlCms = "backoffice/API/PullRequestStatistics/GetGroupedPullRequestData/?fromDate=2010-01-01&toDate=2030-01-01";
+        var prDataUrlCms = "backoffice/API/PullRequestStatistics/GetGroupedPullRequestData/?fromDate=2020-01-01&toDate=2030-01-01";
 
         vm.prStatsCms = [];
 
@@ -20,7 +20,7 @@
     };
 
     $scope.getPullRequestStatisticsDocs = function () {
-        var prDataUrlDocs = "backoffice/API/PullRequestStatistics/GetGroupedPullRequestData/?fromDate=2010-01-01&toDate=2030-01-01&repository=UmbracoDocs";
+        var prDataUrlDocs = "backoffice/API/PullRequestStatistics/GetGroupedPullRequestData/?fromDate=2020-01-01&toDate=2030-01-01&repository=UmbracoDocs";
 
         vm.prStatsDocs = [];
 
@@ -71,7 +71,7 @@
         vm.docsMessage = "Downloading documentation, hold on...";
         notificationsService.success(vm.docsMessage);
 
-        var downloadUrl = "/html/githubpulltrigger";
+        var downloadUrl = "backoffice/API/Docs/DownloadDocs";
         $http.get(downloadUrl)
             .success(function () {
                 vm.docsLoading = false;
@@ -93,7 +93,7 @@
                     notificationsService.error("❌ No members found that match the search term(s).");
                 }
                 if (data.length === 1) {
-                    $scope.selectMember(data[0].Key, data[0].Name, data[0].Id);
+                    $scope.selectMember(data[0].Key, data[0].Name, data[0].Id, data[0].Email);
                 } else {
                     vm.memberSearchResults = data;
                 }
@@ -104,11 +104,12 @@
             });
     };
 
-    $scope.selectMember = function (memberKey, memberName, memberId) {
+    $scope.selectMember = function (memberKey, memberName, memberId, memberEmail) {
         vm.memberSearchResults = undefined;
         vm.memberId = memberId;
         vm.memberBackofficeUrl = "/umbraco/#/member/member/edit/" + memberKey;
         vm.memberName = memberName;
+        vm.memberEmail = memberEmail;
     };
     
     $scope.addContribBadgeToMember = function (memberId) {

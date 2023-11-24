@@ -1,7 +1,9 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Web;
 using System.Web.Hosting;
 using Newtonsoft.Json;
 using Umbraco.Core;
@@ -22,6 +24,9 @@ namespace OurUmbraco.Our
             GetReleasesJson();
             AddNewPackageFormatToggleToPackages();
             AddBannerPurposeToggleToPackages();
+            AddIsPromotedToggleToPackages();
+            AddReleaseCandidatePostfixToRelease();
+            AddCommunityBlogsRssTemplate();
         }
 
         private void EnsureMigrationsMarkerPathExists()
@@ -108,6 +113,110 @@ namespace OurUmbraco.Our
                     contentTypeService.Save(projectContentType);
                 }
 
+                string[] lines = { "" };
+                File.WriteAllLines(path, lines);
+
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error<MigrationsHandler>(string.Format("Migration: '{0}' failed", migrationName), ex);
+            }
+        }
+
+        private void AddIsPromotedToggleToPackages()
+        {
+            var migrationName = MethodBase.GetCurrentMethod().Name;
+
+            try
+            {
+                var path = HostingEnvironment.MapPath(MigrationMarkersPath + migrationName + ".txt");
+                if (File.Exists(path)) return;
+
+                var contentTypeService = ApplicationContext.Current.Services.ContentTypeService;
+                var projectContentType = contentTypeService.GetContentType("Project");
+                var propertyTypeAlias = "isPromoted";
+
+                if (projectContentType != null && projectContentType.PropertyTypeExists(propertyTypeAlias) == false)
+                {
+                    var checkbox = new DataTypeDefinition("Umbraco.TrueFalse");
+                    var checkboxPropertyType = new PropertyType(checkbox, propertyTypeAlias)
+                    {
+                        Name = "Is Promoted?",
+                        Description = "The package is selected for promotion (HQ, technical partner or selected community package)."
+                    };
+                    projectContentType.AddPropertyType(checkboxPropertyType, "Project");
+                    contentTypeService.Save(projectContentType);
+                }
+
+                string[] lines = { "" };
+                File.WriteAllLines(path, lines);
+
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error<MigrationsHandler>(string.Format("Migration: '{0}' failed", migrationName), ex);
+            }
+        }
+
+        private void AddReleaseCandidatePostfixToRelease()
+        {
+            var migrationName = MethodBase.GetCurrentMethod().Name;
+
+            try
+            {
+                var path = HostingEnvironment.MapPath(MigrationMarkersPath + migrationName + ".txt");
+                if (File.Exists(path)) return;
+
+                const string contentTypeAlias = "Release";
+                const string propertyTypeAlias = "ReleaseCandidatePostfix";
+                
+                var contentTypeService = ApplicationContext.Current.Services.ContentTypeService;
+                var projectContentType = contentTypeService.GetContentType(contentTypeAlias);
+
+                if (projectContentType != null && projectContentType.PropertyTypeExists(propertyTypeAlias) == false)
+                {
+                    var textBox = new DataTypeDefinition("Umbraco.Textbox");
+                    var textBoxPropertyType = new PropertyType(textBox, propertyTypeAlias)
+                    {
+                        Name = "Release Candidate Postfix",
+                        Description = "If this is an RC2, enter 2 in this field, if it's RC003 then enter 003"
+                    };
+                    projectContentType.AddPropertyType(textBoxPropertyType, propertyGroupName: "Release");
+                    contentTypeService.Save(projectContentType);
+                }
+
+                string[] lines = { "" };
+                File.WriteAllLines(path, lines);
+
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error<MigrationsHandler>(string.Format("Migration: '{0}' failed", migrationName), ex);
+            }
+        }
+        private void AddCommunityBlogsRssTemplate()
+        {
+            var migrationName = MethodBase.GetCurrentMethod().Name;
+
+            try
+            {
+                var path = HostingEnvironment.MapPath(MigrationMarkersPath + migrationName + ".txt");
+                if (File.Exists(path)) return;
+
+                const string templateAlias = "CommunityBlogsRss";
+                
+                var fileService = ApplicationContext.Current.Services.FileService;
+                var template = fileService.GetTemplate(templateAlias);
+                if (template == null)
+                {
+                    template = new Template(templateAlias, templateAlias);
+                }
+
+                var file = HostingEnvironment.MapPath("~/config/blogrsstemplate.txt");
+                var content = File.ReadAllText(file);
+                template.Content = content;
+                fileService.SaveTemplate(template);
+                
                 string[] lines = { "" };
                 File.WriteAllLines(path, lines);
 

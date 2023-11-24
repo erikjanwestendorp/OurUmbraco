@@ -1,17 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
+using System.Configuration;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using Examine;
-using Examine.LuceneEngine;
 using Examine.SearchCriteria;
-using Lucene.Net.Documents;
+using GraphQL;
 using OurUmbraco.Community.Nuget;
 using OurUmbraco.Community.People;
 using OurUmbraco.Forum.Extensions;
-using OurUmbraco.MarketPlace.Providers;
 using OurUmbraco.Our;
 using OurUmbraco.Our.Examine;
 using OurUmbraco.Our.Models;
@@ -20,14 +16,9 @@ using OurUmbraco.Project.Services;
 using OurUmbraco.Repository.Controllers;
 using OurUmbraco.Repository.Models;
 using OurUmbraco.Wiki.BusinessLogic;
-using umbraco;
-using umbraco.MacroEngines;
 using Umbraco.Core;
 using Umbraco.Core.Models;
-using Umbraco.Core.Models.PublishedContent;
-using Umbraco.Core.Cache;
 using Umbraco.Web;
-using Umbraco.Web.PublishedCache;
 using Umbraco.Web.Security;
 
 namespace OurUmbraco.Repository.Services
@@ -38,7 +29,8 @@ namespace OurUmbraco.Repository.Services
         private readonly MembershipHelper MembershipHelper;
         private readonly UmbracoHelper UmbracoHelper;
 
-        const string BASE_URL = "https://our.umbraco.com";
+        string _baseUrl = ConfigurationManager.AppSettings["PackagesBaseUrl"] ?? "https://our.umbraco.com";
+        
 
         public PackageRepositoryService(UmbracoHelper umbracoHelper, MembershipHelper membershipHelper, DatabaseContext databaseContext)
         {
@@ -73,6 +65,7 @@ namespace OurUmbraco.Repository.Services
         /// <param name="version"></param>
         /// <param name="order"></param>
         /// <param name="includeHidden">Some packages are hidden (i.e. projectLive), set to true to ignore this switch (i.e. for starter kits)</param>
+        /// <param name="onlyPromoted">When flag set only promoted packages are returned.</param>
         /// <returns></returns>
         /// <remarks>
         /// This caches each query for 2 minutes (non-sliding)
@@ -84,7 +77,8 @@ namespace OurUmbraco.Repository.Services
             string query = null,
             string version = null,
             PackageSortOrder order = PackageSortOrder.Default,
-            bool? includeHidden = false)
+            bool? includeHidden = false,
+            bool? onlyPromoted = false)
         {
             var filters = new List<SearchFilters>();
             var searchFilters = new SearchFilters(BooleanOperation.And);
@@ -94,6 +88,11 @@ namespace OurUmbraco.Repository.Services
                 //MUST be live
                 searchFilters.Filters.Add(new SearchFilter("projectLive", "1"));
                 searchFilters.Filters.Add(new SearchFilter("isRetired", "0"));
+            }
+
+            if (onlyPromoted.HasValue && onlyPromoted.Value)
+            {
+                searchFilters.Filters.Add(new SearchFilter("isPromoted", "1"));
             }
 
             if (version.IsNullOrWhiteSpace() == false)
@@ -244,18 +243,19 @@ namespace OurUmbraco.Repository.Services
                 Id = content.GetPropertyValue<Guid>("packageGuid"),
                 Likes = Utils.GetProjectTotalVotes(content.Id),
                 Name = content.Name,
-                Icon = GetThumbnailUrl(BASE_URL + content.GetPropertyValue<string>("defaultScreenshotPath", "/css/img/package2.png"), 154, 281),
+                Icon = GetThumbnailUrl(_baseUrl + content.GetPropertyValue<string>("defaultScreenshotPath", "/css/img/package2.png"), 154, 281),
                 LatestVersion = content.GetPropertyValue<string>("version"),
                 OwnerInfo = ownerId != 0 ? GetPackageOwnerInfo(ownerId, openForCollab, content.Id) : new PackageOwnerInfo(),
-                Url = string.Concat(BASE_URL, content.Url),
+                Url = string.Concat(_baseUrl, content.Url),
                 // stuff added to combine the search between our.umbraco.com and the backoffice
                 Score = score,
                 VersionRange = version,
-                Image = BASE_URL + content.GetPropertyValue<string>("defaultScreenshotPath", "/css/img/package2.png"),
+                Image = _baseUrl + content.GetPropertyValue<string>("defaultScreenshotPath", "/css/img/package2.png"),
                 Summary = GetPackageSummary(content, 50),
                 CertifiedToWorkOnUmbracoCloud = content.GetPropertyValue<bool>("worksOnUaaS"),
                 NuGetPackageId = nuGetPackageId,
-                IsNuGetFormat =  content.GetPropertyValue<bool>("isNuGetFormat")
+                IsNuGetFormat =  content.GetPropertyValue<bool>("isNuGetFormat"),
+                IsPromoted = content.GetPropertyValue<bool>("isPromoted")
             };
         }
 
@@ -316,15 +316,26 @@ namespace OurUmbraco.Repository.Services
                 }).WhereNotNull()
                 .OrderByDescending(x => x)
                 .ToArray();
-
+            
+            var umbHelper = new UmbracoHelper(UmbracoContext.Current);
+            var node = umbHelper.TypedContent(result.Id);
+            var isVersion9 = node.GetPropertyValue<bool>("isNuGetFormat");
+            
             if (orderedVersions.Any() == false)
-                return "n/a";
+            {
+                return isVersion9 ? "9+" : "n/a";
+            }
 
             if (orderedVersions.Length == 1)
                 return orderedVersions.First().ToString();
 
             if (orderedVersions.Min() == orderedVersions.Max())
                 return orderedVersions.Min().ToString();
+
+            if (isVersion9)
+            {
+                return orderedVersions.Min() + " - 9+";
+            }
 
             return orderedVersions.Min() + " - " + orderedVersions.Max();
         }
@@ -397,7 +408,7 @@ namespace OurUmbraco.Repository.Services
             {
                 //if there are no strict package files then return the latest package file
                 
-                packageDetails.ZipUrl = string.Concat(BASE_URL, "/FileDownload?id=", currentReleaseFile);
+                packageDetails.ZipUrl = string.Concat(_baseUrl, "/FileDownload?id=", currentReleaseFile);
                 packageDetails.ZipFileId = currentReleaseFile;
             }
             else if (currentUmbracoVersion < version75)
@@ -425,7 +436,7 @@ namespace OurUmbraco.Repository.Services
                 if (found != -1)
                 {
                     //got one! so use it's id for the file download
-                    packageDetails.ZipUrl = string.Concat(BASE_URL, "/FileDownload?id=", found);
+                    packageDetails.ZipUrl = string.Concat(_baseUrl, "/FileDownload?id=", found);
                     packageDetails.ZipFileId = found;
                 }
                 else if (nonStrictPackageFiles.Length > 0)
@@ -453,13 +464,13 @@ namespace OurUmbraco.Repository.Services
                 if (found != null)
                 {
                     //it's included in the non strict packages so use it
-                    packageDetails.ZipUrl = string.Concat(BASE_URL, "/FileDownload?id=", currentReleaseFile);
+                    packageDetails.ZipUrl = string.Concat(_baseUrl, "/FileDownload?id=", currentReleaseFile);
                     packageDetails.ZipFileId = currentReleaseFile;
                 }
                 else
                 {
                     //use the latest available package version
-                    packageDetails.ZipUrl = string.Concat(BASE_URL, "/FileDownload?id=", nonStrictPackageFiles[0].FileId);
+                    packageDetails.ZipUrl = string.Concat(_baseUrl, "/FileDownload?id=", nonStrictPackageFiles[0].FileId);
                     packageDetails.ZipFileId = nonStrictPackageFiles[0].FileId;
                 }
             }
@@ -587,7 +598,7 @@ namespace OurUmbraco.Repository.Services
 
             foreach (var image in images)
             {
-                var url = string.Concat(BASE_URL, image.Path);
+                var url = string.Concat(_baseUrl, image.Path);
 
                 items.Add(new PackageImage
                 {

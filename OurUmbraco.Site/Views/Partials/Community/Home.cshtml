@@ -1,6 +1,8 @@
 ﻿@using System.Configuration
+@using OurUmbraco.Community.Mastodon
 @using OurUmbraco.Our
 @using OurUmbraco.Our.Models
+@using Skybrud.Social.Mastodon.Models.Statuses
 @inherits OurUmbracoTemplatePage
 @{
     var globalNotificationText = Model.Content.GetPropertyValue<string>("mainNotification");
@@ -58,18 +60,18 @@
 @if (Members.IsLoggedIn())
 {
     @ForumActivity()
+    @MastodonSearch()
     @Meetups()
     @GitHubContributors()
-    @TwitterSearch()
     @Html.Partial("home/documentation")
 }
 else
 {
     @Html.Partial("home/documentation")
     @ForumActivity()
+    @MastodonSearch()
     @Meetups()
     @GitHubContributors()
-    @TwitterSearch()
 }
 
 @helper ForumActivity()
@@ -106,40 +108,6 @@ else
         </section>
 }
 
-@helper TwitterSearch()
-    {
-        <section class="forum">
-            <div class="container">
-                <div class="row">
-
-                    <div class="col-md-12">
-                        <h1 class="text-center">Twitter Activity</h1>
-                        <p>
-                            Recent activity on twitter, where people are talking about Umbraco.
-                        </p>
-                    </div>
-                    <div class="col-md-12">
-                        <small>Recent tweets</small>
-                    </div>
-
-                    <div class="col-md-12 flex" id="twitter-search">
-                        <h2>Loading twitter search results...</h2>
-                        <ul class="umb-load-indicator animated -half-second">
-                            <li class="umb-load-indicator__bubble"></li>
-                            <li class="umb-load-indicator__bubble"></li>
-                            <li class="umb-load-indicator__bubble"></li>
-                        </ul>
-                    </div>
-
-                    <div class="col-md-12 goto-forum">
-                        <a class="button green" href="https://twitter.com/search?f=tweets&vertical=default&q=umbraco&src=typd" target="_blank" rel="noreferrer noopener">Join the conversation on Twitter &rarr;</a>
-                    </div>
-
-                </div>
-            </div>
-        </section>
-}
-
 @helper  GitHubContributors()
     {
         <section class="forum github-contributions">
@@ -159,8 +127,9 @@ else
                                 <a href="https://github.com/umbraco/UmbPack" target="_blank" rel="noreferrer noopener" title="UmbPack">UmbPack</a>,
                                 <a href="https://github.com/umbraco/Package.Templates" target="_blank" rel="noreferrer noopener" title="Package.Templates">Package.Templates</a>,
                                 <a href="https://github.com/umbraco/rfcs" target="_blank" rel="noreferrer noopener" title="RFCs">RFCs</a>,
-                                <a href="https://github.com/umbraco/The-Starter-Kit" target="_blank" rel="noreferrer noopener" title="The-Starter-Kit">The-Starter-Kit</a> and
-                                <a href="https://github.com/umbraco/organizer-guide" target="_blank" rel="noreferrer noopener" title="organizer-guide">organizer-guide</a> repos
+                                <a href="https://github.com/umbraco/The-Starter-Kit" target="_blank" rel="noreferrer noopener" title="The-Starter-Kit">The-Starter-Kit</a>,
+                                <a href="https://github.com/umbraco/organizer-guide" target="_blank" rel="noreferrer noopener" title="organizer-guide">organizer-guide</a> and
+                                <a href="https://github.com/umbraco/Umbraco.UI" target="_blank" rel="noreferrer noopener" title="Umbraco.UI">Umbraco.UI</a> repos
                             </small>
                         </p>
                     </div>
@@ -211,4 +180,55 @@ else
                 </div>
             </div>
         </section>
+}
+
+@helper MastodonSearch() 
+{
+    var mastodonService = new MastodonService();
+    var result = mastodonService.GetStatuses(10);
+
+    if (result != null && result.Any())
+    {
+        <section class="forum">
+            <div class="container">
+                <div class="row">
+
+                    <div class="col-md-12">
+                        <h1 class="text-center">Mastodon Activity</h1>
+                        <p>
+                            Recent activity on Mastodon, where people are talking about Umbraco.
+                        </p>
+                    </div>
+                    <div class="col-md-12">
+                        <small>Recent posts</small>
+                    </div>
+
+                    <div class="col-md-12 flex" id="twitter-search">
+                       @foreach(var status in result.Take(10))
+                       {
+                          <a href="@status.Url" class="forum-thread" target="_blank" rel="noreferrer noopener">
+                   
+                               <div class="avatar">
+                                   <img src="@status.Account.Avatar">
+                               </div>
+                   
+                               <div class="meta">
+                                   <div class="forum-thread-text">
+                                       <h3>@Umbraco.Truncate(Umbraco.StripHtml(status.Content), length: 200, addElipsis: true)</h3>
+                                       <p>by @@@status.Account.DisplayName at @status.CreatedAt.ToString("ddd, dd MMM yyy HH:mm ")</p>
+                                   </div>
+                               </div>
+                           </a>
+                       }
+                       
+                    </div>
+
+                    <div class="col-md-12 goto-forum">
+                        <a class="button green" href="https://umbracocommunity.social/tags/umbraco" target="_blank" rel="noreferrer noopener">Join the conversation on Mastodon &rarr;</a>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    }
 }

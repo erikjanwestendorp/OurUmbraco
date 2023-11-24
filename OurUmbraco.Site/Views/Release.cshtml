@@ -45,6 +45,18 @@
             release.ReleaseDate = overrideReleaseDate;
         }
     }
+	
+	var releaseCandidateText = string.Empty;
+	if(release.ReleaseStatus != null) 
+	{
+		releaseCandidateText = release.ReleaseStatus.ToString() == "RC" ? " RC" : null;
+	}
+	
+    var rcPostfix = releaseContent.GetPropertyValue<string>("ReleaseCandidatePostfix");
+    if (releaseCandidateText != null && string.IsNullOrWhiteSpace(rcPostfix) == false)
+    {
+        releaseCandidateText += rcPostfix;
+    }
 }
 
 <div class="has-sidebar release">
@@ -153,19 +165,6 @@
                         @{
                             var uri = HttpContext.Current.Request.Url;
                             var currentUrl = uri.Scheme + Uri.SchemeDelimiter + uri.Host;
-                        }
-
-                        @if(currentUrl.StartsWith("https://our.umbraco.com", StringComparison.InvariantCultureIgnoreCase)) {
-                            // SJ: I know, this is NUTS! But for some reason..
-                            // on live..
-                            // we need to reset these because it looks different 🤷‍♂️
-
-                            <text>
-                            .release .markdown-syntax ul li {
-                                margin-bottom: 0;
-                                line-height: 1.0;
-                            }
-                            </text>
                         }
 
                         .release-page .explain h2 {
@@ -310,7 +309,7 @@
                             }
                         
                         <div class="col-sm-10">
-                            <h2>v@(Model.Content.Name)</h2>
+                            <h2>v@(Model.Content.Name)@(releaseCandidateText)</h2>
                             @if (release != null)
                             {
                                 <small>Status: <span>@(release.Released ? "Released" : "In Progress")</span></small>
@@ -385,6 +384,23 @@
                                     </div>
                                 </div>
                             }
+                            
+                            <div class="get-release row">
+                                <div class="release package-detail-sidebar">
+                                    @if (release.FullVersion >= new Version(9, 0, 0) && Model.Content.GetPropertyValue<bool>("hasNuGet"))
+                                    {
+                                        <h3>Recommended install from the command line:</h3>
+                                        <pre style="background-color: #0d0d0d; padding: 10px; border-radius: 4px; color: white; margin-bottom: 10px;">
+dotnet new -i Umbraco.Templates::@Model.Content.Name@(string.IsNullOrEmpty(releaseCandidateText) ? null : "-" + releaseCandidateText.ToLowerInvariant().Trim())
+dotnet new umbraco -n "MyProject"
+dotnet run --project "MyProject"</pre>
+                                        
+                                        <span>
+                                            Or use <a href="/documentation/Fundamentals/Setup/Install/">any of the alternative ways to install Umbraco</a>.
+                                        </span>
+                                    }
+                                </div>
+                            </div>
                         }
                         <div class="row markdown-syntax">
 
@@ -414,7 +430,7 @@
                                         @if (release != null && release.FullVersion >= new Version(8, 7, 0) && release.CategorizedIssues != null)
                                         {
                                             foreach (var category in release.CategorizedIssues
-                                                .Where(x => x.Issues.Count != 0)
+                                                .Where(x => x.Issues.Count != 0  && x.Name != "Bellissima")
                                                 .OrderBy(x => x.Priority).ThenBy(x => x.Name)
                                                 .ToList())
                                             {

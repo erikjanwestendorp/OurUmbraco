@@ -28,7 +28,7 @@
                 </div>
 
                 <p>
-                    Powered by Microsoft Azure. No credit card needed. Free 14 day trial and pricing starts at just 30 EUR including hosting.
+                    Powered by Microsoft Azure. No credit card needed. Free 14 day trial.
                 </p>
 
                 <p>
@@ -39,42 +39,36 @@
 
                 <div class="video video-element large-margin-bottom">
                     <a href="/documentation/Umbraco-Cloud/Deployment/">
-                        <img src="https://our.umbraco.com/documentation/Umbraco-Cloud/Deployment/Cloud-to-Cloud/images/deploy-in-portal.gif" alt="See how Umbraco Cloud works" />
+                        <img src="https://our.umbraco.com/Assets/images/deploy-in-portal.gif" alt="See how Umbraco Cloud works"/>
                     </a>
                 </div>
             </div>
 
             <!-- Download Umbraco Column -->
             <div class="col-md-6 col-padding">
-                <h2>Download Umbraco</h2>
+                <h2>Install Umbraco</h2>
                 <p class="download-teaser large-margin-bottom">
-                    If you want to DIY you can download Umbraco either as a ZIP file or via NuGet.
+                    If you want to DIY you can install Umbraco via NuGet.
                     It's the same version of Umbraco CMS that powers Umbraco cloud, but you'll need to find
                     a place to host yourself and handling deployments and upgrades is all down to you.
                 </p>
                 <p>
-                    <pre class="pre small-margin-bottom"><span>PM></span> Install-Package UmbracoCms</pre>
-
-                <p class="large-margin-bottom">
-                    Current Version:
-                    <a id="downloadButton" class="download-link" href="@Url.GetReleaseUrl(latestRelease, true)" onclick="_gaq.push(['_trackEvent', 'Release', 'Download', 'UmbracoCms.@(latestRelease.FullVersion).zip']);">Download @(latestRelease.FullVersion)</a>
-                    -  See all <a class="download-link" href="/contribute/releases/">previous releases</a>
+					We recommend <a class="download-link" href="https://docs.umbraco.com/umbraco-cms/fundamentals/setup/install/install-umbraco-with-templates">using the .NET CLI to start running Umbraco locally</a>.<br />
+					If you have the latest dotnet SDK and runtime installed you should be able to get started with Umbraco like this:
+                    <p class="large-margin-bottom">
+                        <span class="dotnet-nuget pre" style="font-size: 1rem; overflow: hidden; padding: 45px 35px;">
+                            dotnet new install Umbraco.Templates<br/>
+							dotnet new umbraco -n MyProject<br />
+							dotnet run --project MyProject
+                        </span>
+                        <br /><br />Or check out <a href="https://docs.umbraco.com/umbraco-cms/fundamentals/setup/install">all other options for setting up Umbraco</a> locally.
+                    </p>
+					
+					<h2>Releases</h2>
+					<p class="download-teaser">
+						See all <a class="download-link" href="/download/releases/">previous</a> and <a class="download-link" href="/download/releases/progress">upcoming releases</a>.
+					</p>
                 </p>
-
-                <p class="medium-margin-bottom">
-                    We recommend using Microsoft Visual Studio 2017 (15.9.7+) or Microsoft Visual Studio Code
-                    with the IIS Express plugin. Make sure to check the full <a href="/documentation/Getting-Started/Setup/Install/">installation guide</a>
-                </p>
-
-                <div class="requirements large-margin-bottom">
-                    <strong>Requirements:</strong>
-                    <ul>
-                        <li>Microsoft Windows 7+ or Microsoft Windows Server 2012+</li>
-                        <li>Microsoft IIS or Microsoft IIS Express</li>
-                        <li>Microsoft SQL Express 2012+</li>
-                        <li>Microsoft ASP.NET 4.7.2</li>
-                    </ul>
-                </div>
             </div>
         </div>
     </div>
@@ -83,7 +77,7 @@
 <!-- Does this work -->
 <section id="install" class="download-umbraco download-umbraco--install" style="display: none">
     <div class="mac-notice">
-        You're running MacOS, follow <a href="">this guide.</a>
+        You're running macOS, follow <a href="">this guide.</a>
     </div>
     <div class="container">
         <div class="row">

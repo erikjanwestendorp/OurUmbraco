@@ -1,219 +1,147 @@
-﻿namespace OurUmbraco.Community.Nuget
+﻿using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Web;
+using System.Web.Caching;
+using System.Web.Hosting;
+using Examine;
+using Hangfire.Console;
+using Hangfire.Server;
+using Newtonsoft.Json;
+using Umbraco.Core;
+using Umbraco.Core.Configuration;
+using Umbraco.Core.Logging;
+using Umbraco.Core.Models;
+using Umbraco.Web;
+using Umbraco.Web.Routing;
+using Umbraco.Web.Security;
+using File = System.IO.File;
+using Task = System.Threading.Tasks.Task;
+
+namespace OurUmbraco.Community.Nuget
 {
-    using System;
-    using System.Collections.Generic;
-    using System.IO;
-    using System.Linq;
-    using System.Text;
-    using System.Text.RegularExpressions;
-    using System.Web;
-    using System.Web.Caching;
-    using System.Web.Hosting;
-    using Examine;
-    using Newtonsoft.Json;
-
-    using RestSharp;
-
-    using Umbraco.Core;
-    using Umbraco.Core.Configuration;
-    using Umbraco.Core.Models;
-    using Umbraco.Web;
-    using Umbraco.Web.Routing;
-    using Umbraco.Web.Security;
-
-    using File = System.IO.File;
-
     /// <summary>
     /// Represents nuget package download service.
     /// </summary>
     public class NugetPackageDownloadService
     {
-        private  string _nugetServiceUrl = "https://api.nuget.org/v3/index.json";
+        private readonly string _storageDirectory = HostingEnvironment.MapPath("~/App_Data/TEMP/NugetDownloads");
 
-        private  string _storageDirectory = HostingEnvironment.MapPath("~/App_Data/TEMP/NugetDownloads");
+        private readonly string _downloadsFile = "downloads.json";
 
-        private string _downloadsFile = "downloads.json";
-
-        public void ImportNugetPackageDownloads()
+        public async Task ImportNugetPackageDownloads(PerformContext context)
         {
             // get all packages that have a nuget url specified
             var umbContxt = EnsureUmbracoContext();
 
-            var projects = umbContxt.ContentCache.GetByXPath("//Community/Projects//Project [nuGetPackageUrl!='']").ToList();
+            var projects = umbContxt.ContentCache.GetByXPath("//Community/Projects//Project [nuGetPackageUrl!='']")
+                .ToList();
 
-            if (projects.Any())
+            if (projects.Any() == false)
             {
-                // get the services from nuget service index
-                var restClient = new RestClient(this._nugetServiceUrl);
+                context.WriteLine("Found no packages with a `nuGetPackageUrl`");
+                return;
+            }
 
-                var result = restClient.Execute(new RestRequest());
+            var packageInfos = new List<NugetPackageInfo>();
+            foreach (var project in projects)
+            {
+                var nuGetPackageCmd = GetNuGetPackageId(project);
+                    
+                if (string.IsNullOrWhiteSpace(nuGetPackageCmd)) 
+                    continue;
 
-                var response = JsonConvert.DeserializeObject<NugetServiceIndexResponse>(result.Content);
+                packageInfos.Add(new NugetPackageInfo { Name = project.Name, PackageId = nuGetPackageCmd });
+            }
+            
+            var bearerToken = ConfigurationManager.AppSettings["CollabBearerToken"];
+            const string url = "https://collaboratorsv2.euwest01.umbraco.io/umbraco/api/NuGet/PackageStatistics";
+            
+            using (var httpClient = new HttpClient())
+            {
+                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {bearerToken}");
+                var json = JsonConvert.SerializeObject(packageInfos); 
+                var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
 
-                if (response != null)
+                var response = await httpClient.PostAsync(url, httpContent);
+                if (response.IsSuccessStatusCode == false)
                 {
-                    // get a url for the search service
-                    var searchUrl = response.Resources.FirstOrDefault(x => x.Type == "SearchQueryService")?.Id;
+                    context.WriteLine($"Response from {url} was {response.StatusCode} - {response.ReasonPhrase}");
+                    return;
+                }
 
-                    if (!string.IsNullOrWhiteSpace(searchUrl))
-                    {
-                        var nugetPackageDownloads = new List<NugetPackageInfo>();
+                var nugetPackageDownloads = await response.Content.ReadAsStringAsync();
+                
+                // store downloads if any
+                if (string.IsNullOrWhiteSpace(nugetPackageDownloads))
+                {
+                    context.WriteLine($"Response data from {url} was an empty string, exiting");
+                    return;
+                }
 
-                        // we will loop trough our projects in groups of 5 so we can query for multiple packages at ones
-                        // the nuget api has a rate limit, so to avoid hitting that we query multiple packages at once
+                if (!Directory.Exists(_storageDirectory))
+                {
+                    Directory.CreateDirectory(_storageDirectory);
+                }
 
-                        foreach (var projectGroup in projects.InGroupsOf(5))
-                        {
-                            var packageQuery = string.Empty;
+                File.WriteAllText($"{_storageDirectory.EnsureEndsWith("/")}{_downloadsFile}", nugetPackageDownloads, Encoding.UTF8);
 
-                            foreach (var project in projectGroup)
-                            {
-                                var nuGetPackageCmd = GetNuGetPackageId(project);
-
-                                if (!string.IsNullOrWhiteSpace(nuGetPackageCmd))
-                                {
-                                    packageQuery += $"packageid:{nuGetPackageCmd}+";
-                                }
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(packageQuery))
-                            {
-                                var searchQuery = $"{searchUrl}?q={packageQuery.TrimEnd("+")}&prerelease=true";
-
-                                restClient = new RestClient(searchQuery);
-
-                                var packageResponse = restClient.Execute(new RestRequest());
-
-                                var packageSearchResult =
-                                    JsonConvert.DeserializeObject<NugetSearchResponse>(packageResponse.Content);
-
-                                if (packageSearchResult != null)
-                                {
-                                    foreach (var package in packageSearchResult.Results)
-                                    {
-                                        var packageInfo = new NugetPackageInfo
-                                                              {
-                                                                  PackageId = package.Id,
-                                                                  TotalDownLoads = package.TotalDownloads
-                                                              };
-
-                                       
-
-                                        // try get details about downloads over time
-                                        // so we get the publish date of the package on nuget. And calculate the average downloads per day.
-                                        // we can use this data for the popular package query on our
-                                        // we can run into issues when a package has more than 128 versions. This call will return a different response then
-                                        // see https://docs.microsoft.com/en-us/nuget/api/registration-base-url-resource
-
-                                        var registrationClient = new RestClient(package.PackageRegistrationUrl);
-
-                                        var registrationResponse = registrationClient.Execute(new RestRequest());
-
-                                        var registrationResult =
-                                            JsonConvert.DeserializeObject<NugetRegistrationResponse>(
-                                                registrationResponse.Content);
-
-                                        if (registrationResult != null)
-                                        {
-                                            // get the lowest publish date
-                                            var registrationItem = registrationResult.Items.FirstOrDefault();
-
-                                            if (registrationItem != null && registrationItem.Items != null)
-                                            {
-                                                var publishedDate = registrationItem.Items.Select(x => x.CatalogEntry)
-                                                    .OrderBy(x => x.PublishedDate).FirstOrDefault(x => x.PublishedDate.Year > 1900)?.PublishedDate;
-
-                                                if (publishedDate.HasValue)
-                                                {
-                                                    var daysSincePublished =
-                                                        (DateTime.Now - publishedDate.Value).TotalDays;
-
-                                                    packageInfo.AverageDownloadPerDay = (int)Math.Ceiling(package.TotalDownloads / daysSincePublished);
-                                                }
-                                            }
-                                            else
-                                            {
-                                                umbContxt.Application.ProfilingLogger.Logger.Warn(typeof(NugetPackageDownloadService), "Could not retrieve average downloads from nuget for package " + package.Id);
-                                            }
-                                        }
-
-                                        if (!nugetPackageDownloads.Any(x => x.PackageId == packageInfo.PackageId))
-                                        {
-                                            nugetPackageDownloads.Add(packageInfo);
-                                        }
-                                    }
-
-                                   
-                                }
-                            
-                            }
-                        }
-
-                        // store downloads if any
-                        if (nugetPackageDownloads.Any())
-                        {
-                            if (!Directory.Exists(this._storageDirectory))
-                            {
-                                Directory.CreateDirectory(this._storageDirectory);
-                            }
-
-                            var rawJson = JsonConvert.SerializeObject(nugetPackageDownloads, Formatting.Indented);
-                            File.WriteAllText($"{this._storageDirectory.EnsureEndsWith("/")}{this._downloadsFile}", rawJson, Encoding.UTF8);
-
-                            ExamineManager.Instance.IndexProviderCollection["projectIndexer"].RebuildIndex();
-                        }
-                    }
+                try
+                {
+                    ExamineManager.Instance.IndexProviderCollection["projectIndexer"].RebuildIndex();
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Error<NugetPackageDownloadService>("Rebuilding package index failed", ex);
+                    throw;
                 }
             }
         }
 
         public List<NugetPackageInfo> GetNugetPackageDownloads()
         {
-            var downloadsFile = $"{this._storageDirectory.EnsureEndsWith("/")}{this._downloadsFile}";
+            var downloadsFile = $"{_storageDirectory.EnsureEndsWith("/")}{_downloadsFile}";
 
             return (List<NugetPackageInfo>)ApplicationContext.Current.ApplicationCache.RuntimeCache.GetCacheItem(
                 "NugetDownloads",
                 () =>
+                {
+                    var downloads = new List<NugetPackageInfo>();
+
+                    if (File.Exists(downloadsFile))
                     {
-                        var downloads = new List<NugetPackageInfo>();
+                        var rawJson = File.ReadAllText(downloadsFile, Encoding.UTF8);
 
-                        if (File.Exists(downloadsFile))
+                        if (!string.IsNullOrWhiteSpace(rawJson))
                         {
-                            var rawJson = File.ReadAllText(downloadsFile, Encoding.UTF8);
-
-                            if (!string.IsNullOrWhiteSpace(rawJson))
+                            try
                             {
-                                try
-                                {
-                                    downloads = JsonConvert.DeserializeObject<List<NugetPackageInfo>>(rawJson);
-                                }
-                                catch
-                                {
-                                    // should we log this
-                                }
+                                downloads = JsonConvert.DeserializeObject<List<NugetPackageInfo>>(rawJson);
+                            }
+                            catch
+                            {
+                                // should we log this
                             }
                         }
+                    }
 
-                        return downloads;
-                    },
+                    return downloads;
+                },
                 TimeSpan.FromHours(1),
                 false,
                 CacheItemPriority.Normal,
                 null,
                 new[] { downloadsFile });
-
         }
 
         public string GetNuGetPackageId(IPublishedContent project)
         {
-            var nuGetPackageUrl = project.GetPropertyValue<string>("nuGetPackageUrl");
-
-            return GetNugetPackageIdFromUrl(nuGetPackageUrl);
-        }
-
-        public string GetNuGetPackageId(IContent project)
-        {
-            var nuGetPackageUrl = project.GetValue<string>("nuGetPackageUrl");
+            var nuGetPackageUrl = project.GetProperty("nuGetPackageUrl").DataValue.ToString();
 
             return GetNugetPackageIdFromUrl(nuGetPackageUrl);
         }
@@ -232,9 +160,9 @@
 
                 var nuGetPackageUri = new Uri(nuGetPackageUrl);
 
-                if (nuGetPackageUri.Segments.Length >= 2)
+                if (nuGetPackageUri.Segments.Length >= 3)
                 {
-                    nuGetPackageCmd = nuGetPackageUri.Segments[2].Trim("/");
+                    nuGetPackageCmd = nuGetPackageUri.Segments[2].Trim('/');
                 }
             }
 
@@ -249,7 +177,8 @@
             if (UmbracoContext.Current != null)
                 return UmbracoContext.Current;
 
-            var dummyHttpContext = new HttpContextWrapper(new HttpContext(new SimpleWorkerRequest("blah.aspx", "", new StringWriter())));
+            var dummyHttpContext =
+                new HttpContextWrapper(new HttpContext(new SimpleWorkerRequest("blah.aspx", "", new StringWriter())));
 
             return UmbracoContext.EnsureContext(dummyHttpContext,
                 ApplicationContext.Current,

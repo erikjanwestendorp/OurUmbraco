@@ -224,13 +224,6 @@ namespace OurUmbraco.Forum.Api
                 t.ParentId = heartCodeForumId;
             }
             
-            // If the chosen version is Umbraco 9, overrule other categories
-            if (model.Version == 9)
-            {
-                var heartCodeForumId = GetForumIdFromName("Umbraco 9");
-                t.ParentId = heartCodeForumId;
-            }
-            
             TopicService.Save(t);
 
             if (t.IsSpam)
@@ -613,29 +606,9 @@ namespace OurUmbraco.Forum.Api
 
         private static void SendSlackNotification(string post)
         {
-            using (var client = new WebClient())
-            {
-                post = post.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
-
-                var values = new NameValueCollection
-                             {
-                                 {"channel", ConfigurationManager.AppSettings["SlackChannel"]},
-                                 {"token", ConfigurationManager.AppSettings["SlackToken"]},
-                                 {"username", ConfigurationManager.AppSettings["SlackUsername"]},
-                                 {"icon_url", ConfigurationManager.AppSettings["SlackIconUrl"]},
-                                 {"text", post}
-                             };
-
-                try
-                {
-                    var data = client.UploadValues("https://slack.com/api/chat.postMessage", "POST", values);
-                    var response = client.Encoding.GetString(data);
-                }
-                catch (Exception ex)
-                {
-                    LogHelper.Error<ForumController>("Posting update to Slack failed", ex);
-                }
-            }
+            post = post.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+            var slack = new Slack();
+            slack.PostSlackMessage(post);
         }
     }
 

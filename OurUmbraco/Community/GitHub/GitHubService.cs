@@ -12,6 +12,8 @@ using System.Web.Hosting;
 using Examine;
 using Examine.LuceneEngine.SearchCriteria;
 using GraphQL.Client;
+using GraphQL.Client.Http;
+using GraphQL.Client.Serializer.Newtonsoft;
 using GraphQL.Common.Request;
 using Hangfire.Console;
 using Hangfire.Server;
@@ -62,7 +64,6 @@ namespace OurUmbraco.Community.GitHub
         private static readonly object Lock = new object();
         public static bool IsLocked { get; set; }
 
-        private readonly string _hqUsersFile = HostingEnvironment.MapPath("~/Config/githubhq.txt");
         private readonly string _teamUmbracoUsersFile = HostingEnvironment.MapPath("~/Config/TeamUmbraco.json");
 
         private static int _gitHubUserIdPropertyTypeId;
@@ -113,8 +114,10 @@ namespace OurUmbraco.Community.GitHub
         public TeamUmbraco GetTeam(string repository)
         {
             var teamUmbraco = new TeamUmbraco();
-            var usernames = File.ReadAllLines(_hqUsersFile).Where(x => x.Trim() != "").Distinct().ToArray();
-
+            
+            var usersService = new UsersService();
+            var usernames = usersService.GetIgnoredGitHubUsers().Result.ToArray();
+            
             var content = File.ReadAllText(_teamUmbracoUsersFile);
             var teamUmbracoUsers = JsonConvert.DeserializeObject<List<TeamUmbraco>>(content);
             var team = teamUmbracoUsers.FirstOrDefault(x => x.TeamName == repository);
@@ -133,20 +136,6 @@ namespace OurUmbraco.Community.GitHub
             }
 
             return teamUmbraco;
-        }
-
-        public List<string> GetHqMembers()
-        {
-            if (!File.Exists(_hqUsersFile))
-            {
-                var message = $"Config file was not found: {_hqUsersFile}";
-                LogHelper.Debug<GitHubService>(message);
-                throw new Exception(message);
-            }
-
-            var hqUsernames = File.ReadAllLines(_hqUsersFile).Where(x => x.Trim() != "").Distinct().ToArray();
-            var hqMembers = hqUsernames.Select(hqUsername => hqUsername.ToLowerInvariant()).ToList();
-            return hqMembers;
         }
 
         public List<TeamUmbraco> GetTeamMembers()
@@ -307,7 +296,9 @@ namespace OurUmbraco.Community.GitHub
                 "Package.Templates",
                 "rfcs",	
                 "organizer-guide",
-                "The-Starter-Kit"
+                "The-Starter-Kit",
+                "Umbraco.CMS.Backoffice",
+                "Umbraco.UI"
             };
         }
 
@@ -746,12 +737,12 @@ namespace OurUmbraco.Community.GitHub
                 {
                     var graphClient = GetGraphQlClient();
                     var request = string.IsNullOrEmpty(cursor)
-                        ? new GraphQLRequest { Query = query, Variables = $"{{ \"repository\": \"{repositoryName}\" }}" }
-                        : new GraphQLRequest { Query = query, Variables = $"{{ \"cursor\": \"{cursor}\", \"repository\": \"{repositoryName}\" }}" };
+                        ? new GraphQL.GraphQLRequest { Query = query, Variables = $"{{ \"repository\": \"{repositoryName}\" }}" }
+                        : new GraphQL.GraphQLRequest { Query = query, Variables = $"{{ \"cursor\": \"{cursor}\", \"repository\": \"{repositoryName}\" }}" };
 
                     try
                     {
-                        var response = await graphClient.PostAsync(request).ConfigureAwait(false);
+                        var response = await graphClient.SendQueryAsync<GraphQLModel.Repository>(request).ConfigureAwait(false);
 
                         if (response.Errors != null)
                             foreach (var error in response.Errors)
@@ -761,7 +752,7 @@ namespace OurUmbraco.Community.GitHub
                                 context.ResetTextColor();
                             }
 
-                        var repository = response.GetDataFieldAs<GraphQLModel.Repository>("repository");
+                        var repository = response.Data;
                         if (repository.PullRequests.Edges.Any() == false)
                             break;
 
@@ -787,12 +778,12 @@ namespace OurUmbraco.Community.GitHub
             return query;
         }
 
-        private static GraphQLClient GetGraphQlClient()
+        private static GraphQLHttpClient GetGraphQlClient()
         {
             var gitHubAccessToken = ConfigurationManager.AppSettings["GitHubAccessToken"];
-            var graphClient = new GraphQLClient("https://api.github.com/graphql");
-            graphClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {gitHubAccessToken}");
-            graphClient.DefaultRequestHeaders.Add("User-Agent", "OurUmbraco");
+            var graphClient = new GraphQLHttpClient("https://api.github.com/graphql",  new NewtonsoftJsonSerializer());
+            graphClient.HttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {gitHubAccessToken}");
+            graphClient.HttpClient.DefaultRequestHeaders.Add("User-Agent", "OurUmbraco");
             return graphClient;
         }
 
@@ -816,8 +807,10 @@ namespace OurUmbraco.Community.GitHub
             // Initialize a new StringBuilder for logging/testing purposes
             var stringBuilder = new StringBuilder();
 
-            var logins = GetHqMembers();
-
+            
+            var usersService = new UsersService();
+            var logins = usersService.GetIgnoredGitHubUsers().Result.ToArray();
+            
             // A dictionary for the response of each repository
             var responses = new Dictionary<string, IRestResponse<List<GitHubContributorModel>>>();
 
@@ -1322,38 +1315,6 @@ namespace OurUmbraco.Community.GitHub
                 Directory.CreateDirectory(pullsDirectory);
         }
 
-        public void AddCommentToUpForGrabsIssues(PerformContext context)
-        {
-            var repositoryService = new RepositoryManagementService();
-            var issues = repositoryService.GetAllOpenIssues(false);
-            var upForGrabsIssues = issues.Find(i => i.CategoryKey == RepositoryManagementService.CategoryKey.UpForGrabs);
-
-            var removeIssues = new List<int>();
-            var hqMembers = GetHqMembers();
-
-            foreach (var issue in upForGrabsIssues.Issues)
-            {
-                var hqComments = issue.Comments.Where(x => hqMembers.Contains(x.User.Login)).ToList();
-                if (hqComments.Any() == false)
-                    continue;
-
-                var alreadyMentioned = hqComments.Any(x => x.Body.ToLowerInvariant().Contains("Up for grabs".ToLowerInvariant()));
-                if (alreadyMentioned)
-                    removeIssues.Add(issue.Number);
-            }
-
-            var notifyIssues = upForGrabsIssues.Issues.Where(x => removeIssues.Contains(x.Number) == false).ToList();
-            var cleanedIssues = new RepositoryManagementService.GitHubCategorizedIssues
-            {
-                SortOrder = upForGrabsIssues.SortOrder,
-                CategoryKey = upForGrabsIssues.CategoryKey,
-                CategoryDescription = upForGrabsIssues.CategoryDescription,
-                Issues = notifyIssues
-            };
-
-            AddGitHubComment(context, cleanedIssues, GitHubAutoReplyType.UpForGrabs);
-        }
-
         public void AddCommentToAwaitingFeedbackIssues(PerformContext context)
         {
             var repositoryService = new RepositoryManagementService();
@@ -1369,8 +1330,10 @@ namespace OurUmbraco.Community.GitHub
             var stateHQDiscussion = issues.Find(i => i.CategoryKey == RepositoryManagementService.CategoryKey.HqDiscussion);
 
             var removeIssues = new List<int>();
-            var hqMembers = GetHqMembers();
-
+            
+            var usersService = new UsersService();
+            var hqMembers = usersService.GetIgnoredGitHubUsers().Result.ToArray();
+            
             foreach (var issue in stateHQDiscussion.Issues)
             {
                 var hqComments = issue.Comments.Where(x => hqMembers.Contains(x.User.Login)).ToList();
