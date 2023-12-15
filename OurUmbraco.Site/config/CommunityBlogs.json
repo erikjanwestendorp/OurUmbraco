@@ -422,6 +422,24 @@
       "rss": "https://richardsoeteman.net/rss",
       "logo": "https://avatars.githubusercontent.com/u/1543953",
       "memberId": 2798
+    },
+    {
+      "id": "da76ff45-91fa-4f08-ac37-6524ea9f0c4c",
+      "checkTitles": false,
+      "title": "Johan Reitsma",
+      "url": "https://www.johanreitsma.com/",
+      "rss": "https://www.johanreitsma.com/rss",
+      "logo": "https://avatars.githubusercontent.com/u/107849834",
+      "memberId": 108757
+    },
+    {
+      "id": "d43914e4-a4a7-4d9f-a92a-50163e98e00c",
+      "checkTitles": false,
+      "title": "Busra Sengul",
+      "url": "https://dev.to/busrasengul",
+      "rss": "https://dev.to/feed/busrasengul/",
+      "logo": "https://dev-to-uploads.s3.amazonaws.com/uploads/logos/resized_logo_UQww2soKuUsjaOGNB38o.png",
+      "memberId": 276177
     }
   ]
 }
