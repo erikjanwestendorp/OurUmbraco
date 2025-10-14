@@ -1,37 +1,26 @@
 ﻿using System;
-using System.Collections.Specialized;
-using System.Configuration;
 using System.Dynamic;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Web;
 using System.Web.Http;
 using System.Web.Security;
 using Newtonsoft.Json;
-using OurUmbraco.Forum.AntiSpam;
 using OurUmbraco.Forum.Extensions;
-using OurUmbraco.Forum.Library;
 using OurUmbraco.Forum.Models;
 using OurUmbraco.Forum.Services;
 using OurUmbraco.Our.Extensions;
 using umbraco;
 using umbraco.cms.helpers;
 using Umbraco.Core;
-using Umbraco.Core.Logging;
 using Umbraco.Web;
 using Umbraco.Web.WebApi;
 
 namespace OurUmbraco.Forum.Api
 {
-    using System.Threading.Tasks;
-
-    using Microsoft.AspNet.SignalR;
     using Microsoft.AspNet.SignalR.Client;
-
-    using OurUmbraco.SignalRHubs;
 
     [MemberAuthorize(AllowType = "member")]
     public class ForumController : ForumControllerBase
@@ -43,6 +32,8 @@ namespace OurUmbraco.Forum.Api
         {
             dynamic expandoObject = new ExpandoObject();
             var currentMember = Members.GetCurrentMember();
+            var memberIsBlocked = currentMember.GetPropertyValue<bool>("blocked");
+            var currentMemberPosts = currentMember.GetPropertyValue<int>("forumPosts");
 
             var comment = new Comment
             {
@@ -53,10 +44,26 @@ namespace OurUmbraco.Forum.Api
                 TopicId = model.Topic
             };
 
-            comment.IsSpam = currentMember.GetPropertyValue<bool>("blocked") || comment.DetectSpam();
-            CommentService.Save(comment);
-            if (comment.IsSpam)
-                SpamChecker.SendSlackSpamReport(comment.Body, comment.TopicId, "comment", comment.MemberId);
+            var commentIsSpam = comment.DetectSpam();
+            comment.IsSpam = memberIsBlocked || commentIsSpam;
+
+            if (commentIsSpam)
+            {
+                if (memberIsBlocked == false && currentMemberPosts < 1)
+                {
+                    // post only the first thing they try to post - this will trigger a slack
+                    // notification on their first post so we can moderate properly
+                    // prevents them from posting more than one and spamming the slack channel
+                    // if the member is already blocked then stop posting any topics
+                    CommentService.Save(comment);
+                }
+            }
+            else
+            {
+                // member is not blocked and no spam has been detected (generally means
+                // karma level is over 50)
+                CommentService.Save(comment);
+            }
 
             expandoObject.id = comment.Id;
             expandoObject.body = comment.Body.Sanitize().ToString();
@@ -139,8 +146,6 @@ namespace OurUmbraco.Forum.Api
 
             CommentService.Delete(c);
             SignalRCommentDeleted(c.TopicId, id);
-            if (Members.IsAdmin() && c.MemberId != Members.GetCurrentMemberId())
-                SendSlackNotification(BuildDeleteNotifactionPost(Members.GetCurrentMember().Name, c.MemberId));
         }
 
         [HttpGet]
@@ -191,6 +196,9 @@ namespace OurUmbraco.Forum.Api
         public ExpandoObject Topic(TopicSaveModel model)
         {
             dynamic o = new ExpandoObject();
+            var currentMember = Members.GetCurrentMember();
+            var memberIsBlocked = currentMember.GetPropertyValue<bool>("blocked");
+            var currentMemberPosts = currentMember.GetPropertyValue<int>("forumPosts");
 
             var t = new Topic();
             t.Body = model.Body;
@@ -208,7 +216,9 @@ namespace OurUmbraco.Forum.Api
             t.Score = 0;
             t.Answer = 0;
             t.LatestComment = 0;
-            t.IsSpam = Members.GetCurrentMember().GetPropertyValue<bool>("blocked") || t.DetectSpam();
+            
+            var topicIsSpam = t.DetectSpam();
+            t.IsSpam = memberIsBlocked || topicIsSpam;
             
             // If the chosen version is Umbraco Heartcore, overrule other categories
             if (model.Version == Constants.Forum.HeartcoreVersionNumber)
@@ -223,11 +233,24 @@ namespace OurUmbraco.Forum.Api
                 var heartCodeForumId = GetForumIdFromName(Constants.Forum.UmbracoUnoName);
                 t.ParentId = heartCodeForumId;
             }
-            
-            TopicService.Save(t);
 
-            if (t.IsSpam)
-                SpamChecker.SendSlackSpamReport(t.Body, t.Id, "topic", t.MemberId);
+            if (topicIsSpam)
+            {
+                if (memberIsBlocked == false && currentMemberPosts < 1)
+                {
+                    // post only the first thing they try to post - this will trigger a slack
+                    // notification on their first post so we can moderate properly
+                    // prevents them from posting more than one and spamming the slack channel
+                    // if the member is already blocked then stop posting any topics
+                    TopicService.Save(t);
+                }
+            }
+            else
+            {
+                // member is not blocked and no spam has been detected (generally means
+                // karma level is over 50)
+                TopicService.Save(t);
+            }
 
             o.url = string.Format("{0}/{1}-{2}", library.NiceUrl(t.ParentId), t.Id, t.UrlName);
 
@@ -310,9 +333,6 @@ namespace OurUmbraco.Forum.Api
                 throw new Exception("You cannot delete this topic");
 
             CommentService.Delete(c);
-
-            if (Members.IsAdmin() && c.MemberId != Members.GetCurrentMemberId())
-                SendSlackNotification(BuildDeleteNotifactionPost(Members.GetCurrentMember().Name, c.MemberId));
         }
 
         [HttpGet]
@@ -431,8 +451,6 @@ namespace OurUmbraco.Forum.Api
 
             member.SetValue("blocked", true);
             memberService.Save(member);
-
-            SendSlackNotification(BuildBlockedNotifactionPost(Members.GetCurrentMember().Name, member.Id, true));
         }
 
         [HttpPost]
@@ -449,8 +467,6 @@ namespace OurUmbraco.Forum.Api
 
             member.SetValue("blocked", false);
             memberService.Save(member);
-
-            SendSlackNotification(BuildBlockedNotifactionPost(Members.GetCurrentMember().Name, member.Id, false));
         }
 
         [HttpDelete]
@@ -555,9 +571,6 @@ namespace OurUmbraco.Forum.Api
 
             var newForumTopicNotification = new NotificationsCore.Notifications.AccountApproved();
             newForumTopicNotification.SendNotification(member.Email);
-
-            SendSlackNotification(BuildBlockedNotifactionPost(Members.GetCurrentMember().Name, member.Id, false));
-
             return minimumKarma;
         }
 
@@ -586,8 +599,6 @@ namespace OurUmbraco.Forum.Api
             }
 
             post = post + string.Format("Topic title: *{0}*\nLink to author: https://our.umbraco.com/member/{1}\n Link to {2}: https://our.umbraco.com{3}{4}\n\n", topic.Title, posterId, flag.TypeOfPost, topic.GetUrl(), flag.TypeOfPost == "comment" ? "#comment-" + flag.Id : string.Empty);
-
-            SendSlackNotification(post);
         }
 
         private static string BuildDeleteNotifactionPost(string adminName, int memberId)
@@ -602,13 +613,6 @@ namespace OurUmbraco.Forum.Api
             var post = string.Format("Member {0} by admin {1}\n", blocked ? "_blocked_" : "*unblocked/approved*", adminName);
             post = post + string.Format("Go to affected member https://our.umbraco.com/member/{0}\n\n", memberId);
             return post;
-        }
-
-        private static void SendSlackNotification(string post)
-        {
-            post = post.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
-            var slack = new Slack();
-            slack.PostSlackMessage(post);
         }
     }
 

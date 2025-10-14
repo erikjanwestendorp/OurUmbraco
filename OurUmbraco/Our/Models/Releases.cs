@@ -65,6 +65,12 @@ namespace OurUmbraco.Our.Models
 
         [JsonProperty("categorizedIssues")]
         public List<Category> CategorizedIssues { get; set; }
+
+        [JsonProperty("isLts")]
+        public bool IsLts { get; set; }
+
+        [JsonProperty("eolDate")]
+        public DateTime EolDate { get; set; }
         
         public class Issue
         {
@@ -97,6 +103,12 @@ namespace OurUmbraco.Our.Models
             
             [JsonProperty("version")]
             public string Version { get; set; }
+            
+            [JsonProperty("repositoryOwner")]
+            public string RepositoryOwner { get; set; }
+            
+            [JsonProperty("repositoryName")]
+            public string RepositoryName { get; set; }
         }
         
         public class Category

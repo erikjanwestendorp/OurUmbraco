@@ -8,6 +8,7 @@ using System.Text;
 using System.Web;
 using System.Web.Helpers;
 using System.Web.Hosting;
+using GraphQL.Validation;
 using Hangfire.Console;
 using Hangfire.Server;
 using Newtonsoft.Json;
@@ -41,6 +42,28 @@ namespace OurUmbraco.Our.Services
         {
             var cache = GetReleasesCache();
             return cache.FirstOrDefault(x => x.LatestRelease);
+        }
+
+        public List<Release> GetDownloadReleases()
+        {
+            var cache = GetReleasesCache();
+            var allReleasedMajors = cache.Where(x => x.Released && x.FullVersion.Minor == 0 && x.FullVersion.Build == 0).OrderByDescending(x => x.FullVersion).ToList();
+            var latest = allReleasedMajors.FirstOrDefault();
+            var downloadReleases = new List<Release>();
+            if(latest != null)
+            {
+                downloadReleases.Add(latest);
+                if (latest.IsLts == false)
+                {
+                    var latestLts = allReleasedMajors.FirstOrDefault(x => x.IsLts);
+                    if(latestLts != null)
+                    {
+                        downloadReleases.Add(latestLts);
+                    }
+                }
+            }            
+            
+            return downloadReleases;
         }
         
         public Release GetLatestVersion8Release()
@@ -89,9 +112,10 @@ namespace OurUmbraco.Our.Services
 
         public void GenerateReleasesCache(PerformContext context)
         {
-            var releasesPageNodeId = int.Parse(ConfigurationManager.AppSettings["uReleaseParentNodeId"]);
             var umbracoHelper = new UmbracoHelper(GetUmbracoContext());
-            var releasesNode = umbracoHelper.TypedContent(releasesPageNodeId);
+            var rootNode = umbracoHelper.TypedContentAtRoot().First();
+            var downloadNode = rootNode.Children().First(x => x.DocumentTypeAlias == "DownloadLanding");
+            var releasesNode = downloadNode.Children().First(x => x.DocumentTypeAlias == "ReleaseLanding");
 
             var releaseNodes = releasesNode.Children.ToArray();
             context.WriteLine($"Found {releaseNodes.Length} releases");
@@ -107,6 +131,11 @@ namespace OurUmbraco.Our.Services
                 var recommendedRelease = node.GetPropertyValue<bool>("recommendedRelease");
                 var releaseDescription = node.GetPropertyValue<string>("bodyText");
                 var manualProgressPercent = node.GetPropertyValue<int>("overrideYouTrackReleaseProgress");
+                var releaseDateString = node.GetPropertyValue<string>("overrideYouTrackReleaseDate");
+                DateTime.TryParse(releaseDateString, out var releaseDate);
+                var eolDateString = node.GetPropertyValue<string>("ReleaseEolDate");
+                DateTime.TryParse(releaseDateString, out var eolDate);
+                var isLts = node.GetPropertyValue<bool>("ReleaseSupportType");
 
                 var release = new Release
                 {
@@ -118,7 +147,10 @@ namespace OurUmbraco.Our.Services
                     PlannedRelease = status != "Released",
                     Released = status == "Released",
                     Issues = new List<Release.Issue>(),
-                    PercentComplete = manualProgressPercent
+                    PercentComplete = manualProgressPercent,
+                    ReleaseDate = releaseDate,
+                    IsLts = isLts,
+                    EolDate = eolDate
                 };
                 releases.Add(release);
                 if (recommendedRelease)
@@ -126,26 +158,26 @@ namespace OurUmbraco.Our.Services
                     recommendedReleases.Add(release);
                 }
             }
-            var latestRecommendedRelease = recommendedReleases.OrderBy(x => x.Version).LastOrDefault();
+            var latestRecommendedRelease = recommendedReleases.OrderBy(x => x.FullVersion).LastOrDefault();
             if (latestRecommendedRelease != null)
             {
                 // set the newest recommended release as the current release
                 latestRecommendedRelease.CurrentRelease = true;
             }
 
-            var latestRelease = releases.OrderBy(x => x.Version).LastOrDefault(x => x.CurrentRelease && x.Released);
+            var latestRelease = releases.OrderBy(x => x.FullVersion).LastOrDefault(x => x.CurrentRelease && x.Released);
             if (latestRelease != null)
             {
                 latestRelease.LatestRelease = true;
-                context.WriteLine($"Newest downloadable release is {latestRelease.Version}");
+                context.WriteLine($"Newest downloadable release is {latestRelease.FullVersion}");
             }
             else
             {
-                var newestReleased = releases.OrderBy(x => x.Version).LastOrDefault(x => x.Released);
+                var newestReleased = releases.OrderBy(x => x.FullVersion).LastOrDefault(x => x.Released);
                 if (newestReleased != null)
                 {
                     newestReleased.LatestRelease = true;
-                    context.WriteLine($"Latest downloadable release is {newestReleased.Version}");
+                    context.WriteLine($"Latest downloadable release is {newestReleased.FullVersion}");
                 }
             }
 
@@ -177,18 +209,23 @@ namespace OurUmbraco.Our.Services
 
         private static void PopulateGitHubIssues(PerformContext context, List<Release> releases)
         {
-            var repository = new OurUmbraco.Community.Models.Repository("umbraco-cms", "umbraco", "Umbraco-CMS", "Umbraco CMS");
-            var issuesDirectory = HostingEnvironment.MapPath($"{repository.IssuesStorageDirectory()}/");
-            var pullsDirectory = HostingEnvironment.MapPath($"{repository.IssuesStorageDirectory()}/pulls/");
-            AddItemsToReleases(context, releases, issuesDirectory, "issue");
-            AddItemsToReleases(context, releases, pullsDirectory, "pull");
+            var repositories = new[] { "Umbraco.CMS.Backoffice", "Umbraco-CMS" };
+            foreach (var repositoryName in repositories)
+            {
+                var repository = new OurUmbraco.Community.Models.Repository(repositoryName.ToLowerInvariant(), "umbraco", repositoryName, repositoryName.Replace("-", " ").Replace(".", " "));
+
+                var issuesDirectory = HostingEnvironment.MapPath($"{repository.IssuesStorageDirectory()}/");
+                var pullsDirectory = HostingEnvironment.MapPath($"{repository.IssuesStorageDirectory()}/pulls/");
+                AddItemsToReleases(context, releases, issuesDirectory, "issue", repositoryName);
+                AddItemsToReleases(context, releases, pullsDirectory, "pull", repositoryName);
+            }            
         }
         
-        private static void AddItemsToReleases(PerformContext context, List<Release> releases, string directory, string fileTypeName) 
+        private static void AddItemsToReleases(PerformContext context, List<Release> releases, string directory, string fileTypeName, string repositoryName) 
         {
             context.WriteLine($"Processing {fileTypeName}s");
             var files = Directory.EnumerateFiles(directory, $"*.{fileTypeName}.combined.json").ToArray();
-            context.WriteLine($"Found {files.Length} items");
+            context.WriteLine($"Found {files.Length} items for repo {repositoryName}");
             
             foreach (var file in files)
             {
@@ -209,7 +246,7 @@ namespace OurUmbraco.Our.Services
                     if (release == null)
                     {
                         context.WriteLine(
-                            $"Item {item.Number} is tagged with release version {version} but this release has no corresponding node in Our");
+                            $"Item {repositoryName}/{item.Number} is tagged with release version {version} but this release has no corresponding node in Our");
                         continue;
                     }
 
@@ -251,7 +288,9 @@ namespace OurUmbraco.Our.Services
                         Type = type,
                         Source = ReleaseSource.GitHub,
                         CommunityContribution = communityContrib,
-                        ContributorAvatar = item.IsPr ? item.User.AvatarUrl : ""
+                        ContributorAvatar = item.IsPr ? item.User.AvatarUrl : "",
+                        RepositoryName = item.RepoSlug,
+                        RepositoryOwner = item.RepoOwner
                     };
 
                     if (release.FullVersion >= new System.Version(8, 7, 0))

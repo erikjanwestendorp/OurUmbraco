@@ -7,6 +7,27 @@
 @{
     // Save query string for use in pagination links
     var queryString = HttpUtility.ParseQueryString(Request.QueryString.ToString());
+    var paramsList = new Dictionary<string, string>();
+
+    foreach (var parameter in queryString)
+    {
+        var key = (string)parameter;
+        if(key == null)
+        {
+            key = "invalid";
+        }
+        var value = queryString.Get(key);
+        paramsList.Add(key, value);
+    }
+    var knownKeys = new List<string> { "page", "unsolved", "noreplies" };
+    foreach (var key in paramsList)
+    {
+        if (knownKeys.Any(x => x.ToLowerInvariant() == key.Key.ToLowerInvariant()) == false)
+        {
+            // this is not a known parameter, reject the request
+            return;
+        }
+    }
 
     const int pagesToShowLeft = 4;
     int page;
@@ -52,19 +73,19 @@
 
     var categories = Model.Content.AncestorOrSelf(2);
     var ignoreCategories = new List<string>
-    {
+{
         "Umbraco Courier",
         "Templates, (partial) views and macros",
         "Extending Umbraco and using the API",
         "Developing Packages",
         "Umbraco 8",
         "Umbraco 9",
-        "Contributing to Umbraco CMS", 
+        "Contributing to Umbraco CMS",
         "Umbraco Uno"
     };
     var filteredCategories = categories.Children()
         .Where(x => ignoreCategories.InvariantContains(x.Name) == false);
-    
+
 }
 @if (Model.Content.NewTopicsAllowed() == false || Model.Content.AncestorOrSelfIsArchived())
 {
@@ -88,32 +109,6 @@
     <div class="search-big">
         <input type="search" class="forum-search-input" required placeholder="Search for threads">
         <label for="search">Search for threads</label>
-    </div>
-
-    <div class="or">or</div>
-    <div class="sorting">
-        <select id="selectCategory" data-placeholder="Choose&hellip;">
-            <option class="category" selected disabled>Filter by category</option>
-            @if (categories.ContentType.Alias == "Projects")
-            {
-                foreach (var tag in CurrentPage.Parent.Children)
-                {
-                    <option class="@tag.Name.ToLower().Replace(" ", "")" value="@tag.Id" @(CurrentPage.Id == tag.Id ? "selected" : null)>@tag.Name</option>
-                }
-            }
-            else
-            {
-                <option class="all" value="@categories.Id">All categories</option>
-                @* Category sorting is done from the backoffice, the current order is based on what we expect to be most used *@
-                foreach (var tag in filteredCategories)
-                {
-                    if (tag.ContentType.Alias == "Forum" && tag.IsArchived() == false)
-                    {
-                        <option class="@tag.Name.ToLower().Replace(" ", "")" value="@tag.Id" @(CurrentPage.Id == tag.Id ? "selected" : null)>@tag.Name.Replace(" And Getting Started", "")</option>
-                    }
-                }
-            }
-        </select>
     </div>
 
     <div id="search-options" class="search-options">
@@ -144,9 +139,7 @@
 <section class="forum">
     <!-- FORUM LIST HEADER START -->
     <div class="forum-head">
-
         <div class="topic">Topic</div>
-        <div class="category">Category</div>
         <div class="posts">Replies</div>
 
     </div>
@@ -174,9 +167,6 @@
                                 <span title="@string.Format("{0:ddd, dd MMM yyyy} {0:HH:mm:ss} UTC+{1}", topic.Updated, TimeZone.CurrentTimeZone.GetUtcOffset(DateTime.Now))">topic created by <strong>@topic.AuthorName</strong> @topic.Updated.ConvertToRelativeTime()</span>
                             }
                         </a>
-                    </div>
-                    <div class="category frontend">
-                        <a href="@forum.Url">@(Utils.GetForumName(forum))</a>
                     </div>
                     <div class="posts"><small>@topic.Replies</small> <span>replies</span></div>
                 </div>

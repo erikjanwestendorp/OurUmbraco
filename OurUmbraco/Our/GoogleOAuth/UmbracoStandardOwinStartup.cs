@@ -6,7 +6,6 @@ using Hangfire.Console;
 using Hangfire.SqlServer;
 using Microsoft.Owin;
 using OurUmbraco.Auth;
-using OurUmbraco.Community.Map;
 using OurUmbraco.NotificationsCore.Notifications;
 using OurUmbraco.Our.GoogleOAuth;
 using Owin;
@@ -55,26 +54,14 @@ namespace OurUmbraco.Our.GoogleOAuth
             
             // Schedule jobs
             var scheduler = new ScheduleHangfireJobs();
-            scheduler.MarkAsSolvedReminder();
-            scheduler.UpdateGitHubContributors();
-            scheduler.CacheUpcomingMeetups(null);
             scheduler.UpdateCommunityBlogPosts(null);
-            scheduler.UpdateCommunityVideos();
-            scheduler.UpdateVimeoVideos();
             scheduler.GetGitHubPullRequests();
-            scheduler.RefreshKarmaStatistics();
             scheduler.GenerateReleasesCache(null);
             scheduler.UpdateGitHubIssues(null);
-            scheduler.UpdateAllIssues(null);
-            scheduler.GetAllGitHubLabels(null);
-            // scheduler.AddCommentToAwaitingFeedbackIssues(null);
-            // scheduler.NotifyUnmergeablePullRequests(null);
-            // scheduler.AddCommentToStateHQDiscussionIssues(null);
-            //
-            // scheduler.CheckContributorBadge(null);
-            scheduler.GetNugetDownloads(null);
             scheduler.FetchStaticApiDocumentation(null);
             scheduler.FetchMastodonPosts(null);
+            scheduler.UpdateVimeoVideos();
+            scheduler.UpdateCommunityVideos();
         }
     }
 }

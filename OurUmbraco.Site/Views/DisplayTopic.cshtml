@@ -15,7 +15,7 @@
             @Html.Action("Render", "Breadcrumb", new { linkToCurrent = true })
             <!-- FORUM BREADCRUMB END -->
             <!-- THREAD ACTIONS START -->
-            @if (topic != null)
+            @if (System.Configuration.ConfigurationManager.AppSettings["DiscourseEnabled"] == "false" && topic != null)
             {
                 Html.RenderPartial("~/Views/Partials/Forum/TopicActions.cshtml", topic);
             }
@@ -32,9 +32,13 @@
             <p>This topic no longer exists.</p>
         }
     </div>
+
 </section>
 
-@Html.Partial("~/Views/Partials/Forum/TopicForm.cshtml")
+@if (System.Configuration.ConfigurationManager.AppSettings["DiscourseEnabled"] == "false") { 
+    @Html.Partial("~/Views/Partials/Forum/TopicForm.cshtml")
+}
+
 
 @section HeadCssScripts {
     <link rel="stylesheet" type="text/css" href="/css/tooltipster.css" />

@@ -12,7 +12,7 @@
     var memberIsBlocked = MemberData != null && MemberData.IsBlocked;
 
 
-    Html.RequiresCss("~/assets/css/style.min.css", 0);
+    Html.RequiresCss("~/assets/css/style.css", 0);
     Html.RequiresCss("https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.1.20/jquery.fancybox.min.css", 0);
 
 
@@ -28,7 +28,8 @@
     Html.RequiresJs("~/assets/js/jquery.scrolly.js");
     Html.RequiresJs("~/assets/js/lodash.min.js");
     Html.RequiresJs("~/assets/js/community.js");
-    Html.RequiresJs("~/assets/js/app.min.js");
+    Html.RequiresJs("~/assets/js/app.js");
+    Html.RequiresJs("~/assets/js/search.js");
     Html.RequiresJs("~/assets/js/editor.min.js");
 }<!doctype html>
 <!--[if gt IE 8]><!-->
@@ -77,11 +78,9 @@
 
                 if (string.IsNullOrWhiteSpace(title) == false)
                 {
-                    <text>@title - </text>
+                    <text>@title</text>
                 }
             }
-
-            @Model.Content.Name - our.umbraco.com
         </title>
         <meta name="description" content="">
     }
@@ -90,24 +89,11 @@
 
     @Html.Partial("~/Views/Partials/Community/JsValues.cshtml")
 
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-        })(window,document,'script','dataLayer','GTM-W9TZ2XW');</script>
-    <!-- End Google Tag Manager -->
-
     @Html.RenderCssHere()
     @RenderSection("HeadCssScripts", false)
 </head>
 
 <body class="@bodyCss">
-
-<!-- Google Tag Manager (noscript) -->
-<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W9TZ2XW"
-                  height="0" width="0" style="display: none; visibility: hidden"></iframe></noscript>
-<!-- End Google Tag Manager (noscript) -->
 
 @Html.Partial("~/Views/Partials/Members/QuickMenu.cshtml")
 
@@ -162,11 +148,6 @@
                     @if (HttpContext.Current != null && HttpContext.Current.Request.UserAgent != null && HttpContext.Current.Request.UserAgent.ToLower().Contains("googlebot"))
                     {
                         <text>This site is running Umbraco.</text>
-                    }
-                    else
-                    {
-                        <text>This site is running</text>
-                        <data id="umbraco-version" value="@UmbracoVersion.GetSemanticVersion()">Umbraco version @UmbracoVersion.GetSemanticVersion()</data>
                     }
                 </div>
             </div>

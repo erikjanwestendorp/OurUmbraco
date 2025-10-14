@@ -66,8 +66,8 @@
     <Reference Include="AutoMapper.Net4, Version=3.3.1.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
       <HintPath>..\packages\AutoMapper.3.3.1\lib\net40\AutoMapper.Net4.dll</HintPath>
     </Reference>
-    <Reference Include="Azure.Core, Version=1.19.0.0, Culture=neutral, PublicKeyToken=92742159e12e44c8, processorArchitecture=MSIL">
-      <HintPath>..\packages\Azure.Core.1.19.0\lib\net461\Azure.Core.dll</HintPath>
+    <Reference Include="Azure.Core, Version=1.21.0.0, Culture=neutral, PublicKeyToken=92742159e12e44c8, processorArchitecture=MSIL">
+      <HintPath>..\packages\Azure.Core.1.21.0\lib\net461\Azure.Core.dll</HintPath>
     </Reference>
     <Reference Include="businesslogic, Version=1.0.7706.20575, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\UmbracoCms.Core.7.15.7\lib\net452\businesslogic.dll</HintPath>
@@ -524,7 +524,7 @@
     <Content Include="App_Plugins\Skybrud.Umbraco.Redirects\Views\Editors\Inbound.html" />
     <Content Include="App_Plugins\Skybrud.Umbraco.Redirects\Views\Editors\Outbound.html" />
     <Content Include="Assets\css\fonts\icomoon\icomoon.svg" />
-    <Content Include="Assets\css\style.min.css" />
+    <Content Include="Assets\css\style.css" />
     <Content Include="Assets\images\app-icons\acme-tile-large.png" />
     <Content Include="Assets\images\app-icons\acme-tile-medium.png" />
     <Content Include="Assets\images\app-icons\acme-tile-small.png" />
@@ -569,6 +569,7 @@
     <Content Include="Assets\images\karma.svg" />
     <Content Include="Assets\images\logo_email.png" />
     <Content Include="Assets\images\osx.png" />
+    <Content Include="Assets\images\ourdiscord.png" />
     <Content Include="Assets\images\package2.png" />
     <Content Include="Assets\images\reply.svg" />
     <Content Include="Assets\images\selectdown.svg" />
@@ -578,7 +579,7 @@
     <Content Include="Assets\images\sign-in-with-google.png" />
     <Content Include="Assets\images\solved.gif" />
     <Content Include="Assets\images\tools.png" />
-    <Content Include="Assets\js\app.min.js" />
+    <Content Include="Assets\js\app.js" />
     <Content Include="Assets\js\community.js" />
     <Content Include="Assets\js\components\overlay.js" />
     <Content Include="Assets\js\editor.min.js" />
@@ -594,6 +595,7 @@
     <Content Include="Assets\js\map\m4.png" />
     <Content Include="Assets\js\map\m5.png" />
     <Content Include="Assets\js\map\profile.map.js" />
+    <Content Include="Assets\js\search.js" />
     <Content Include="Assets\swipebox\css\swipebox.css" />
     <Content Include="Assets\swipebox\css\swipebox.min.css" />
     <Content Include="Assets\swipebox\img\icons.png" />
@@ -603,6 +605,7 @@
     <Content Include="Assets\swipebox\js\jquery.swipebox.min.js" />
     <Content Include="config\404handlers.config" />
     <Content Include="config\applications.config" />
+    <Content Include="config\blogrsstemplate.txt" />
     <Content Include="config\ClientDependency.config" />
     <Content Include="config\Dashboard.config" />
     <Content Include="config\ExamineIndex.config">
@@ -659,6 +662,7 @@
     <Content Include="Config\EmbeddedMedia.config" />
     <Content Include="Config\BaseRestExtensions.config" />
     <Content Include="Config\BackOfficeTours\getting-started.json" />
+    <Content Include="config\YouTrackArchive.json" />
     <None Include="config\YouTubePlaylists.json" />
     <Content Include="css\forum\pagedown.css" />
     <Content Include="css\img\select2-spinner.gif" />
@@ -1839,7 +1843,6 @@
     <Content Include="Views\MacroPartials\Privacy\CookieList.cshtml" />
     <Content Include="Views\MacroPartials\Project\ApiKeys.cshtml" />
     <Content Include="Views\MainRss.cshtml" />
-    <Content Include="Views\Partials\Dashboards\PRData.cshtml" />
     <Content Include="Views\Partials\Forum\Comment.cshtml" />
     <Content Include="Assets\css\fonts\our-icon\our-umbraco.eot" />
     <Content Include="Assets\css\fonts\our-icon\our-umbraco.svg" />
@@ -4502,14 +4505,11 @@
     <Content Include="Views\Error.cshtml" />
     <Content Include="Views\PeopleKarma.cshtml" />
     <Content Include="Views\Lesson.cshtml" />
-    <Content Include="Views\Partials\Home\GitHubContributors.cshtml" />
     <Content Include="Views\Partials\Home\Meetups.cshtml" />
     <Content Include="Views\Partials\Community\ForumStatistics.cshtml" />
-    <Content Include="Views\CommunityHub.cshtml" />
     <Content Include="Views\Partials\Community\Hub.cshtml" />
     <Content Include="Views\Partials\Community\HubScripts.cshtml" />
     <Content Include="Views\Partials\Community\KarmaStatistics.cshtml" />
-    <Content Include="Views\Partials\Videos\Home.cshtml" />
     <Content Include="Views\CommunityBlogs.cshtml" />
     <Content Include="Views\Partials\Community\Blogs.cshtml" />
     <Content Include="Views\Partials\Community\Statistics.cshtml" />
@@ -4521,11 +4521,8 @@
     <Content Include="Views\CommunityMeetups.cshtml" />
     <Content Include="Views\CommunityMvps.cshtml" />
     <Content Include="Views\Partials\Community\MVPs.cshtml" />
-    <Content Include="Views\Videos.cshtml" />
     <Content Include="Views\ProjectGroup.cshtml" />
     <Content Include="Views\ProjectsTags.cshtml" />
-    <Content Include="Views\CommunityVideos.cshtml" />
-    <Content Include="Views\Partials\Community\Videos.cshtml" />
     <Content Include="Views\Partials\Community\Map.cshtml" />
     <Content Include="Views\Partials\Community\Sidebar.cshtml" />
     <Content Include="Views\CommunityBadges.cshtml" />
@@ -4539,19 +4536,9 @@
     <Content Include="Views\Partials\Emails\ActivationEmailTemplate.cshtml" />
     <Content Include="Views\Partials\Community\Map.cshtml" />
     <Content Include="Views\Partials\Community\Sidebar.cshtml" />
-    <Content Include="Views\CommunityCalendar.cshtml" />
-    <Content Include="Views\Partials\Community\Calendar.cshtml" />
-    <Content Include="Views\TeamUmbraco.cshtml" />
-    <Content Include="Views\Dashboard.cshtml" />
     <Content Include="Views\Apps.cshtml" />
     <Content Include="Views\Partials\Home\Banners.cshtml" />
-    <Content Include="Views\HQDashboard.cshtml" />
-    <Content Include="Views\DashboardLayout.cshtml" />
-    <Content Include="Views\Partials\Dashboards\Issues.cshtml" />
-    <Content Include="Views\Partials\Dashboards\Pull Requests.cshtml" />
-    <Content Include="Views\Partials\Dashboards\DebugInfo.cshtml" />
     <Content Include="Views\CommunityHubUProfileBlogPosts.cshtml" />
-    <Content Include="Views\Partials\Dashboards\Process.cshtml" />
     <Content Include="Views\ProjectLanding.cshtml" />
     <Content Include="Views\Minimal\GitHub\Error.cshtml" />
     <Content Include="Views\Minimal\Master.cshtml" />
@@ -4603,6 +4590,7 @@
     <VSToolsPath Condition="exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v12.0\WebApplications\Microsoft.WebApplication.targets')">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v12.0</VSToolsPath>
     <VSToolsPath Condition="exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v14.0\WebApplications\Microsoft.WebApplication.targets')">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v14.0</VSToolsPath>
     <VSToolsPath Condition="exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v15.0\WebApplications\Microsoft.WebApplication.targets')">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v15.0</VSToolsPath>
+    <VSToolsPath Condition="exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v17.0\WebApplications\Microsoft.WebApplication.targets')">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v17.0</VSToolsPath>
   </PropertyGroup>
   <PropertyGroup>
     <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
